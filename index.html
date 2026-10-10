@@ -8,8 +8,9 @@
 <title>백중미션 — 퇴로고가마을 다섯 자리</title>
 <meta name="description" content="2026 백중마을 축제 · 조선 캐릭터를 찾아 마을을 한 바퀴 도는 다섯 자리 미션투어">
 <link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Nanum+Brush+Script&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>if(!window.L){ document.write('<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"><script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"><\/script>'); }</script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root{--paper:#F3ECDC; --paper2:#EFE6D2; --ink:#221C15; --brown:#8A5A33; --deep:#4A3A28; --tan:#C7B08A; --seal:#9C3B22; --ok:#3E6B45; --blue:#2C5E8A}
@@ -285,7 +286,7 @@ function startGeo(){
     fixes.push(f); fixes=fixes.filter(x=>Date.now()-x.t<30000);          // 최근 30초만 보관
     // 와이파이·기지국 기반의 거친 값(오차 큼)은 더 좋은 값이 있으면 무시
     if(!me || f.acc<=me.acc*1.5 || Date.now()-me.t>20000) me=f;
-    updateNav(); const ea=$('#editAcc'); if(ea) ea.textContent='현재 위치 오차 ±'+Math.round(me.acc)+' m'+(me.acc>30?' — 하늘이 트인 곳에서 10초쯤 기다리면 좋아집니다':' (양호)');
+    updateNav(); const ea=$('#editAcc'); if(ea) ea.textContent='현재 위치 오차 ±'+Math.round(me.acc)+' m'+(me.acc>300?' — 대략값: 브라우저 앱의 "정확한 위치 사용" 권한과 GPS를 켜 주세요':(me.acc>30?' — 하늘이 트인 곳에서 10초쯤 기다리면 좋아집니다':' (양호)'));
   },
     e=>{ if(e && e.code===1){ me=null; const n=$('#navTxt'); if(n) n.innerHTML='위치를 쓸 수 없어 글로 안내합니다<small>설정에서 위치 허용 후 새로고침</small>'; } /* 일시 오류(신호 없음·시간 초과)는 마지막 위치 유지 */ },
     { enableHighAccuracy:true, maximumAge:5000, timeout:15000 });
@@ -297,8 +298,14 @@ const DIR=['북','북동','동','남동','남','남서','서','북서'];
 
 /* ── 지도 (Leaflet) ── */
 let map=null, pins=[], myMarker=null, myCircle=null, line=null;
+let mapRetry=0;
 function ensureMap(){
-  if(map || typeof L==='undefined') return;
+  if(map) return;
+  if(typeof L==='undefined'){
+    const el=document.getElementById('map'); if(el) el.innerHTML='<p style="padding:24px 16px; text-align:center; color:#8A5A33; font-size:.9rem">지도를 불러오는 중입니다… 계속 비어 있으면 새로고침해 주세요<br><small>지도 없이도 위 글 안내와 거리·방향으로 진행할 수 있습니다</small></p>';
+    if(mapRetry++<3){ const s=document.createElement('script'); s.src=['https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js','https://unpkg.com/leaflet@1.9.4/dist/leaflet.js','https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js'][mapRetry%3]; s.onload=()=>{ if(el) el.innerHTML=''; ensureMap(); focusSpot(state.cur); updateNav(); }; document.head.appendChild(s); }
+    return;
+  }
   map=L.map('map',{zoomControl:false, attributionControl:true}).setView([SPOTS[0].lat,SPOTS[0].lng],17);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:20, maxNativeZoom:19, attribution:'© OpenStreetMap'}).addTo(map);
   SPOTS.forEach((s,i)=>{
@@ -335,7 +342,9 @@ function updateNav(){
   if(!n) return;
   if(!me){ n.innerHTML='위치 허용을 누르면 거리와 방향이 나옵니다<small>'+s.dest+'</small>'; return; }
   const d=dist(me,s), b=bearing(me,s);
-  n.innerHTML='<span class="dist">'+(d<Math.max(15,me.acc)?'도착했습니다':'약 '+Math.round(d/5)*5+' m · '+DIR[Math.round(b/45)%8]+'쪽')+'</span><small>'+s.dest+' · 오차 ±'+Math.round(me.acc)+' m'+(me.acc>60?' (정확한 위치 켜기·하늘 트인 곳)':'')+'</small>';
+  const coarse = me.acc>300;
+  n.innerHTML='<span class="dist">'+((d<15 && me.acc<=50)?'도착했습니다':'약 '+(d>=1000?(d/1000).toFixed(1)+' km':Math.round(d/5)*5+' m')+' · '+DIR[Math.round(b/45)%8]+'쪽')+'</span><small>'+s.dest+' · 오차 ±'+(me.acc>=1000?(me.acc/1000).toFixed(1)+' km':Math.round(me.acc)+' m')+
+    (coarse?'<br><b style="color:var(--seal)">위치가 대략값입니다</b> — 휴대폰 설정 → 앱 → 이 브라우저 → 권한 → 위치 → <b>정확한 위치 사용</b> 켜기, GPS(위치) 켜기':(me.acc>60?' (하늘 트인 곳에서 잠시 기다리면 정확해집니다)':''))+'</small>';
   if(ar) ar.style.transform='rotate('+b+'deg)';
   if(map){
     if(!myMarker){ myMarker=L.marker([me.lat,me.lng],{icon:L.divIcon({className:'',html:'<div class="mydot"></div>',iconSize:[18,18],iconAnchor:[9,9]}), interactive:false}).addTo(map);
