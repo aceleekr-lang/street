@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#221C15">
+<meta name="robots" content="noindex">
+<title>백중미션 — 퇴로고가마을 다섯 자리</title>
+<meta name="description" content="2026 백중마을 축제 · 조선 캐릭터를 찾아 마을을 한 바퀴 도는 다섯 자리 미션투어">
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Nanum+Brush+Script&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--paper:#F3ECDC; --paper2:#EFE6D2; --ink:#221C15; --brown:#8A5A33; --deep:#4A3A28; --tan:#C7B08A; --seal:#9C3B22; --ok:#3E6B45; --blue:#2C5E8A}
+*{box-sizing:border-box}
+html{background:var(--ink)}
+body{margin:0 auto; background:var(--paper); color:var(--ink); font-family:'Gowun Batang',serif; font-size:1.04rem; line-height:1.72; word-break:keep-all; overflow-wrap:anywhere; max-width:520px; min-height:100vh; padding:0 0 calc(env(safe-area-inset-bottom,0px) + 36px); position:relative}
+.brush{font-family:'Nanum Brush Script',cursive; font-weight:400}
+button{font-family:inherit; cursor:pointer}
+a{color:var(--brown)}
+header{position:sticky; top:0; z-index:900; background:rgba(243,236,220,.95); backdrop-filter:blur(6px); border-bottom:1.3px solid var(--ink); padding:calc(env(safe-area-inset-top,0px) + 10px) 16px 10px}
+header .t{display:flex; align-items:baseline; justify-content:space-between; gap:10px}
+header .t b{font-size:1rem; letter-spacing:1px}
+header .t small{font-size:.76rem; color:var(--brown)}
+.stamps{display:flex; gap:8px; margin-top:8px}
+.stamp{flex:1; aspect-ratio:1; max-width:50px; border:1.5px solid var(--ink); border-radius:50%; display:grid; place-items:center; font-size:1.02rem; background:#fff; color:var(--ink); padding:0; transition:transform .15s}
+.stamp.done{background:var(--seal); border-color:var(--seal); color:#fff; transform:rotate(-8deg); box-shadow:inset 0 0 0 2px var(--paper), inset 0 0 0 3.5px var(--seal)}
+.stamp.cur{box-shadow:0 0 0 3px var(--paper), 0 0 0 4.5px var(--brown)}
+.stamp:disabled{opacity:.4; cursor:default}
+section.scr{display:none; padding:20px 16px 10px; animation:in .3s ease}
+section.scr.on{display:block}
+@keyframes in{from{opacity:0; transform:translateY(8px)} to{opacity:1; transform:none}}
+h1{font-size:2.3rem; line-height:1.15; margin:4px 0 6px}
+h1 .brush{font-size:1.35em}
+.lead{color:var(--deep); margin:0 0 18px; font-size:.97rem}
+.card{border:1.4px solid var(--ink); background:#fff; padding:14px 16px; margin:0 0 14px}
+.card.tint{background:var(--paper2); border-style:dashed}
+.card h4{margin:0 0 6px; font-size:.98rem}
+ol.pre{margin:0; padding-left:22px; font-size:.94rem}
+ol.pre li{margin:0 0 5px}
+ol.pre b{color:var(--seal)}
+.num{display:inline-flex; align-items:center; gap:10px; margin:0 0 4px}
+.num .n{width:38px; height:38px; border-radius:50%; border:1.5px solid var(--seal); color:var(--seal); display:grid; place-items:center; font-size:1.2rem; font-weight:700}
+.num .w{font-size:.78rem; letter-spacing:2px; color:var(--brown)}
+img.hero{width:100%; display:block; border:1.4px solid var(--ink); margin:0 0 14px; aspect-ratio:16/9; object-fit:cover}
+.ttl{display:flex; align-items:center; gap:12px; margin:0 0 10px}
+.ttl img.por{width:64px; height:64px; border-radius:50%; object-fit:cover; border:1.5px solid var(--ink); flex:none}
+.ttl h2{margin:0}
+h2{font-size:1.5rem; margin:0 0 10px; line-height:1.3}
+h2 .brush{font-size:1.25em}
+/* 길 안내 + 지도 */
+.go{border:1.4px solid var(--ink); background:#fff; margin:0 0 14px; overflow:hidden}
+.go .gt{padding:12px 14px 10px; border-bottom:1px dashed rgba(138,90,51,.45)}
+.go .gt b{display:block; font-size:.76rem; letter-spacing:2px; color:var(--seal); margin-bottom:2px}
+.go .gt .dest{font-size:1.08rem; font-weight:700}
+.go .gt p{margin:4px 0 0; font-size:.93rem; color:var(--deep)}
+.go .nav{display:flex; align-items:center; gap:12px; padding:8px 14px; background:var(--paper2); font-size:.9rem}
+.go .nav .arrow{width:34px; height:34px; border-radius:50%; background:var(--blue); color:#fff; display:grid; place-items:center; font-size:1.1rem; transition:transform .4s; flex:none}
+.go .nav .dist{font-weight:700}
+.go .nav small{display:block; color:var(--brown); font-size:.78rem}
+#map{height:230px; width:100%; background:#E9E3D3}
+#map.big{height:62vh}
+.go .mapbar{display:flex; gap:6px; padding:8px 10px; border-top:1px solid rgba(138,90,51,.25)}
+.go .mapbar button{flex:1; padding:7px; font-size:.8rem; border:1.2px solid var(--ink); background:#fff}
+.mydot{width:18px; height:18px; border-radius:50%; background:var(--blue); border:3px solid #fff; box-shadow:0 0 0 2px var(--blue), 0 0 12px rgba(44,94,138,.6)}
+.pin{width:30px; height:30px; border-radius:50% 50% 50% 0; transform:rotate(-45deg); background:var(--seal); border:2px solid #fff; box-shadow:0 2px 6px rgba(0,0,0,.35); display:grid; place-items:center}
+.pin span{transform:rotate(45deg); color:#fff; font-weight:700; font-size:.9rem; font-family:'Gowun Batang',serif}
+.pin.dim{background:var(--tan)}
+/* 미션 */
+.mission h3{margin:0 0 8px; font-size:1.02rem; display:flex; align-items:center; gap:8px}
+.mission h3 .tag{font-size:.7rem; letter-spacing:2px; border:1.2px solid var(--seal); color:var(--seal); padding:1px 8px}
+.mission .q{margin:0 0 12px; font-size:1.02rem}
+.mission .q b{color:var(--seal)}
+.ans{display:flex; gap:8px}
+.ans input{flex:1; min-width:0; padding:12px 14px; font-size:1.12rem; font-family:inherit; border:1.5px solid var(--ink); background:#fff; border-radius:0; text-align:center; letter-spacing:2px}
+.btn{padding:12px 18px; font-size:1rem; border:1.5px solid var(--ink); background:var(--ink); color:var(--paper); white-space:nowrap; text-decoration:none; display:inline-block; text-align:center}
+.btn.ghost{background:#fff; color:var(--ink)}
+.btn.wide{display:block; width:100%; margin-top:10px; padding:14px}
+.btn:disabled{opacity:.45; cursor:default}
+.fb{min-height:1.3em; font-size:.92rem; margin:10px 0 0}
+.fb.ok{color:var(--ok); font-weight:700}
+.fb.no{color:var(--seal)}
+.hint{font-size:.86rem; color:var(--brown); margin:8px 0 0}
+.hint button,.lnk{background:none; border:none; color:var(--brown); text-decoration:underline; font-size:.86rem; padding:0}
+.riddle{display:none; margin-top:10px; padding:10px 12px; background:var(--paper2); font-size:.92rem; border-left:3px solid var(--brown)}
+.choices{display:grid; gap:8px; margin:0 0 12px}
+.choice{text-align:left; padding:11px 12px; border:1.4px solid var(--ink); background:#fff; font-size:.95rem; line-height:1.5}
+.choice b{display:block}
+.choice small{color:var(--deep)}
+.choice[aria-pressed="true"]{background:var(--ink); color:var(--paper)}
+.choice[aria-pressed="true"] small{color:var(--tan)}
+.photo input[type=file]{display:none}
+.photo .shots{display:flex; gap:8px}
+.photo .shots label{flex:1; padding:14px 8px; border:1.5px dashed var(--ink); background:#fff; font-size:.95rem; text-align:center; cursor:pointer}
+.photo .shots label b{display:block; font-size:1.3rem}
+.photo .prev{display:none; margin-top:12px}
+.photo .prev img{width:100%; display:block; border:1.4px solid var(--ink)}
+.photo .acts{display:flex; gap:8px; margin-top:10px}
+.photo .acts .btn{flex:1}
+.photo .tip{font-size:.8rem; color:var(--brown); margin:8px 0 0; text-align:center}
+.next{margin-top:16px}
+.skip{text-align:center; margin-top:10px; font-size:.84rem}
+.skip button{background:none; border:none; color:var(--deep); text-decoration:underline; font-size:.84rem}
+/* 룰렛·점괘 */
+.wheelwrap{position:relative; width:min(78vw,320px); margin:10px auto 8px}
+.wheelwrap canvas{width:100%; display:block}
+.wheelwrap .ptr{position:absolute; top:-6px; left:50%; transform:translateX(-50%); width:0; height:0; border-left:14px solid transparent; border-right:14px solid transparent; border-top:26px solid var(--seal); filter:drop-shadow(0 2px 2px rgba(0,0,0,.3))}
+.wheelwrap .hub{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:68px; height:68px; white-space:nowrap; border-radius:50%; background:var(--paper); border:3px solid var(--ink); display:grid; place-items:center; font-weight:700; font-size:1.1rem}
+.fortune{display:none; border:2px solid var(--seal); background:#fff; padding:18px 18px 16px; margin:14px 0; position:relative; animation:in .5s ease}
+.fortune .hanja{font-size:3rem; line-height:1; color:var(--seal); text-align:center; margin:0}
+.fortune .ttl{text-align:center; font-size:1.35rem; margin:6px 0 10px}
+.fortune p{margin:0 0 8px; font-size:.97rem}
+.fortune .luck{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px}
+.fortune .luck span{font-size:.8rem; border:1.2px solid var(--tan); padding:2px 9px; background:var(--paper2)}
+.fortune .seal{position:absolute; right:12px; top:10px; width:44px; height:44px; background:var(--seal); color:#fff; display:grid; place-items:center; font-weight:700; transform:rotate(-10deg); font-size:.95rem}
+.center{text-align:center}
+.foot{font-size:.76rem; color:var(--brown); text-align:center; margin-top:26px; line-height:1.6}
+#toast{position:fixed; left:50%; bottom:28px; transform:translateX(-50%); background:var(--ink); color:var(--paper); padding:10px 18px; font-size:.9rem; opacity:0; transition:opacity .25s; pointer-events:none; max-width:90vw; text-align:center; z-index:999}
+#toast.on{opacity:1}
+#editbox{display:none; margin:0 16px 16px; font-size:.85rem; border:1.4px dashed var(--seal); padding:12px; background:#fff}
+#editbox textarea{width:100%; height:120px; font-family:monospace; font-size:.75rem}
+.leaflet-container{font-family:inherit}
+</style>
+</head>
+<body>
+<header>
+  <div class="t"><b>백중미션</b><small id="hdSub">다섯 자리 · 조선 캐릭터를 찾아라</small></div>
+  <div class="stamps" id="stamps"></div>
+</header>
+
+<section class="scr on" id="home">
+  <img class="hero" src="img/hero.jpg" alt="" onerror="this.style.display='none'">
+  <h1><span class="brush">조선 사람을 찾아</span><br>백중마을 다섯 자리</h1>
+  <p class="lead">퇴로고가마을을 한 바퀴 돌며 추노꾼·어우동·광년이를 찾습니다. 앱이 다음 자리를 지도로 알려주고, 미션을 통과하면 도장이 찍힙니다. 다섯 도장을 모으면 <b>행운의 룰렛</b>이 돌아갑니다.</p>
+  <div class="card">
+    <h4>다섯 자리</h4>
+    <ol class="pre" id="preList"></ol>
+  </div>
+  <div class="card tint">
+    <h4>시작 전에</h4>
+    <ol class="pre">
+      <li><b>위치 허용</b>을 누르면 지도에 내 위치와 다음 자리까지 거리가 나옵니다 (허용하지 않아도 글로 안내합니다)</li>
+      <li>사진은 <b>내 휴대폰에만</b> 남습니다. 찍은 뒤 "앨범에 저장"을 누르세요</li>
+      <li>미션은 <b>一부터 순서대로</b> 진행합니다. <b>백중놀이 퍼레이드</b>(11:00·15:30) 앞뒤로는 잠시 쉬어가고, 앱이 다시 시작 시간을 알려줍니다</li>
+      <li>마을은 주민이 사시는 곳 — 담 너머를 들여다보거나 닫힌 대문 안으로 들어가지 않기</li>
+    </ol>
+  </div>
+  <button class="btn wide" id="start">출발 — 입구의 추노꾼을 찾아라</button>
+  <p class="foot">2026 백중마을 축제 · 10.10(토)–10.11(일) 10:00–17:00<br>주최·주관 밀양문화관광재단</p>
+</section>
+
+<section class="scr" id="spot"></section>
+
+<section class="scr" id="fin">
+  <div class="center">
+    <h1 style="font-size:1.9rem"><span class="brush">다섯 도장 완성</span><br>행운의 룰렛</h1>
+    <p class="lead" id="finLead">오늘 애쓴 당신께 백중의 복을 나눕니다. 룰렛을 눌러 돌려 보세요.</p>
+  </div>
+  <img class="hero" src="img/finish.jpg" alt="" onerror="this.style.display='none'">
+  <div class="wheelwrap"><div class="ptr"></div><canvas id="wheel" width="640" height="640"></canvas><button class="hub" id="spin">돌리기</button></div>
+  <div class="fortune" id="fortune"></div>
+  <div class="skip"><button id="reset">처음부터 다시 하기</button></div>
+  <p class="foot">2026 백중마을 축제 · 밀양문화관광재단</p>
+</section>
+
+<div id="editbox"><b>자리 좌표 편집</b> — 지도의 핀을 끌어 옮기거나, 그 자리에 서서 번호를 고르고 <b>내 위치에 놓기</b>를 누르세요. <b>저장</b>하면 모든 방문객의 앱에 바로 반영됩니다.
+  <div style="display:flex; gap:6px; margin:8px 0">
+    <select id="editIdx" style="flex:1; padding:9px; font-family:inherit; font-size:.95rem; border:1.5px solid var(--ink); background:#fff"><option value="0">一 입구(추노꾼)</option><option value="1">二 체험존</option><option value="2">三 골목(어우동)</option><option value="3">四 대나무길(광년이)</option><option value="4">五 입구(추노꾼)</option></select>
+    <button class="btn ghost" id="editHere" style="flex:1">내 위치에 놓기</button>
+  </div>
+  <textarea id="editOut" readonly></textarea>
+  <div style="display:flex; gap:6px; margin-top:6px"><button class="btn" id="editSave" style="flex:2">저장 (서버)</button><button class="btn ghost" id="editCopy" style="flex:1">복사</button></div>
+  <p id="editMsg" style="margin:6px 0 0; color:var(--brown)"></p></div>
+<div id="toast"></div>
+<canvas id="cv" style="display:none"></canvas>
+
+<script>
+/* ══════════ 설정: 자리·미션·좌표는 여기서만 고칩니다 ══════════
+   lat/lng 는 추정값입니다. 주소창에 ?edit=1 을 붙여 열면 핀을 끌어 옮기고 좌표를 복사할 수 있습니다. */
+const SPOTS = [
+  { n:'一', title:'입구의 <span class="brush">추노꾼</span>', dest:'행사장 입구 (셔틀 정류장 앞)', lat:35.5490, lng:128.7004,
+    go:'셔틀에서 내려 행사장 입구로 가세요. 추노꾼 차림의 안내꾼이 길목을 지키고 있습니다.',
+    type:'riddle', tag:'수수께끼',
+    q:'추노꾼에게 <b>"수수께끼 하나 주시오"</b> 하고 말을 거세요. 추노꾼이 낸 수수께끼의 답을 적으면 통과입니다.',
+    ph:'답', answers:['백중','백중날','머슴날','호미씻이','백중일'],
+    hint:'음력 7월 보름, 머슴이 쉬고 상을 받던 날 — 오늘 이 축제의 이름이기도 합니다.',
+    riddle:'일 년에 단 하루, 머슴이 상석에 앉고 주인이 상을 차리는 날. 호미를 씻어 걸고 새 옷을 입는 이 날의 이름은?',
+    showRiddle:true,  // 추노꾼이 자리를 비웠을 때 "수수께끼 보기"를 열 수 있게. 숨기려면 false
+    pre:'행사장 입구에서 <b>추노꾼</b>을 찾아 수수께끼 풀기' },
+
+  { n:'二', title:'전통놀이 <span class="brush">한판</span>', dest:'자율체험존 (전통놀이 마당)', lat:35.5497, lng:128.7003,
+    go:'입구에서 마을 길을 따라 체험존으로. 투호 항아리와 국궁 과녁이 보이는 곳입니다.',
+    type:'choice-photo', tag:'놀이 미션',
+    q:'셋 중 하나를 골라 성공하고, <b>성공한 장면</b>을 찍어 올리면 통과입니다.',
+    choices:[ {k:'투호', t:'투호 던지기', s:'화살 10개 중 3개를 절구(항아리)에 넣기'},
+              {k:'비석치기', t:'비석치기', s:'비석을 맞혀 쓰러뜨리기'},
+              {k:'국궁', t:'국궁 쏘기', s:'과녁 정중앙 맞히기'} ],
+    label:'二 전통놀이',
+    pre:'자율체험존에서 <b>투호·비석치기·국궁</b> 중 하나 성공' },
+
+  { n:'三', title:'골목의 <span class="brush">어우동</span>', dest:'백중마을 골목길', lat:35.5493, lng:128.6996,
+    go:'체험존을 지나 돌담 사이 골목으로 들어가세요. 어우동이 골목 어딘가를 거닐고 있습니다.',
+    type:'photo', tag:'참참참',
+    q:'어우동에게 <b>참참참</b>을 청하세요. <b>연속 두 판</b>을 이기면 어우동이 사진을 허락합니다. 어우동과 함께 찍은 사진을 올리면 통과.',
+    note:'참참참 — "참참참!" 하며 상대가 손으로 가리키는 방향과 다른 쪽으로 고개를 돌리면 이깁니다. 같은 쪽을 보면 짐.',
+    label:'三 어우동과',
+    pre:'골목에서 <b>어우동</b>과 참참참 2연승 후 함께 사진' },
+
+  { n:'四', title:'대나무길의 <span class="brush">광년이</span>', dest:'대나무길', lat:35.5505, lng:128.6990,
+    go:'골목 끝에서 대나무길로. 바람 소리 사이로 광년이의 노랫소리가 들리면 다 온 겁니다.',
+    type:'riddle', tag:'춤사위 미션',
+    q:'광년이가 보여주는 <b>백중놀이 춤사위 한 동작</b>을 그대로 따라 추세요. 광년이가 "얼쑤!" 하면 합격 — 광년이가 귓속말로 알려주는 <b>오늘의 암호</b>를 적으면 통과입니다.',
+    ph:'암호', answers:['얼쑤','얼수','얼씨구'],
+    hint:'광년이가 합격을 외칠 때 쓴 바로 그 추임새입니다.',
+    riddle:'', showRiddle:false,
+    label:'四 광년이',
+    pre:'대나무길에서 <b>광년이</b>의 춤사위 따라 추고 암호 받기' },
+
+  { n:'五', title:'다시, <span class="brush">그 추노꾼</span>', dest:'행사장 입구 (셔틀 정류장 앞)', lat:35.5490, lng:128.7004,
+    go:'마을을 한 바퀴 돌아 다시 입구로. 추노꾼은 둘입니다 — 처음 수수께끼를 낸 바로 그 추노꾼을 찾으세요.',
+    type:'photo', tag:'마지막 미션',
+    q:'수수께끼를 냈던 <b>그 추노꾼</b>을 찾아 "답을 맞혔소!" 하고 외치세요. 추노꾼과 함께 찍은 사진을 올리면 다섯 도장 완성.',
+    label:'五 추노꾼과',
+    pre:'입구로 돌아와 <b>그 추노꾼</b>과 함께 사진' }
+];
+/* 퍼레이드 휴식: 시작 30분 전 ~ 종료 15분 뒤까지 미션 멈춤 (행사 당일에만 적용) */
+const PARADES = [ {start:'11:00', end:'11:30'}, {start:'15:30', end:'16:00'} ];   // 일정표: 1차 11:00(민복 모집 10:30~), 2차 15:30(모집 15:00~), 각 30분
+const PAUSE_BEFORE = 30, PAUSE_AFTER = 15;           // 분
+const EVENT_DATES = ['2026-10-10','2026-10-11'];
+/* 룰렛 점괘 8가지 — 동양식 축복 */
+const FORTUNES = [
+  { h:'豊', t:'대풍(大豊)', s:'애쓴 만큼 거두는 해', p:'세벌 김매기 끝에 백중이 오듯, 올해 뿌린 수고가 가을걷이로 돌아옵니다. 미뤄 둔 일 하나를 오늘 마무리하면 곳간이 찹니다.', one:'오늘 한 마디 — "거두는 손은 뿌린 손이다"', luck:['행운의 방향 남쪽','행운의 색 황금빛','가져갈 것 햇곡 한 줌'] },
+  { h:'福', t:'만복(萬福)', s:'복이 담을 넘어오는 해', p:'낮은 돌담 너머로 이웃의 복이 건너옵니다. 먼저 인사하는 사람에게 좋은 인연과 소식이 따릅니다. 오늘 만난 사람의 이름을 기억하세요.', one:'오늘 한 마디 — "담이 낮으면 복이 넘는다"', luck:['행운의 방향 동쪽','행운의 색 붉은빛','가져갈 것 댕기 한 자락'] },
+  { h:'安', t:'평안(平安)', s:'물러나 쉬어도 좋은 해', p:'퇴로(退老), 물러나 쉰다는 이 마을 이름처럼 올해는 멈추는 자리에 복이 있습니다. 서두르지 않아도 길이 열리니, 한 템포 늦게 가도 늦지 않습니다.', one:'오늘 한 마디 — "쉬는 것도 농사다"', luck:['행운의 방향 북쪽','행운의 색 쪽빛','가져갈 것 가산저수지 바람'] },
+  { h:'壽', t:'장수(長壽)', s:'오래 걷는 다리의 해', p:'백 년 넘은 고택이 다섯 대를 버틴 것은 기둥이 아니라 손질한 손 덕분입니다. 몸을 아끼는 작은 습관 하나가 긴 복을 만듭니다. 오늘 걸은 걸음이 그 시작입니다.', one:'오늘 한 마디 — "천천히, 그러나 매일"', luck:['행운의 방향 서쪽','행운의 색 솔잎빛','가져갈 것 돌담길 한 바퀴'] },
+  { h:'和', t:'화목(和睦)', s:'한 상에 둘러앉는 해', p:'백중날 주인과 머슴이 한 상에 앉듯, 올해는 식구와 벗이 한자리에 모이는 날이 늘어납니다. 상을 차리는 쪽이 되면 복이 두 배가 됩니다.', one:'오늘 한 마디 — "상 하나가 식구를 모은다"', luck:['행운의 방향 집 쪽','행운의 색 흰빛','가져갈 것 가족사진 한 장'] },
+  { h:'財', t:'재물(財物)', s:'곳간이 차는 해', p:'머슴이 새 옷과 용돈을 받던 날이 백중입니다. 묵묵히 해 온 일에 값이 매겨지고, 뜻밖의 자리에서 보답이 옵니다. 작은 돈을 허투루 쓰지 않는 손에 큰돈이 머뭅니다.', one:'오늘 한 마디 — "한 섬도 한 톨부터"', luck:['행운의 방향 남동쪽','행운의 색 황토빛','가져갈 것 호패 하나'] },
+  { h:'智', t:'지혜(智慧)', s:'수수께끼가 풀리는 해', p:'서고정사에서 글을 읽던 선비처럼 올해는 배우는 자리에서 길이 보입니다. 오래 막혔던 물음에 답이 오고, 그 답은 책이 아니라 사람에게서 옵니다.', one:'오늘 한 마디 — "묻는 사람이 먼저 안다"', luck:['행운의 방향 북동쪽','행운의 색 먹빛','가져갈 것 붓 한 자루'] },
+  { h:'緣', t:'인연(因緣)', s:'좋은 사람이 오는 해', p:'청사초롱이 혼례 길을 밝히듯, 올해는 귀한 인연이 등불처럼 찾아옵니다. 오늘 마주친 낯선 웃음을 가볍게 넘기지 마세요. 그 인연이 다음 해를 바꿉니다.', one:'오늘 한 마디 — "등을 켜 두면 손님이 온다"', luck:['행운의 방향 남서쪽','행운의 색 연홍빛','가져갈 것 향낭 하나'] }
+];
+/* ════════════════════════════════════════════════════════════ */
+
+const $ = s => document.querySelector(s);
+const KEY='bj_mission_v2';
+let state={ done:{}, cur:0, choice:{}, fortune:null };
+try{ const s=JSON.parse(localStorage.getItem(KEY)||'null'); if(s&&s.done) state=Object.assign(state,s); }catch(e){}
+const save=()=>{ try{ localStorage.setItem(KEY, JSON.stringify(state)); }catch(e){} };
+const toast=t=>{ const el=$('#toast'); el.textContent=t; el.classList.add('on'); setTimeout(()=>el.classList.remove('on'),2400); };
+const norm=s=>String(s||'').normalize('NFC').replace(/[\s\.\-·,!?]/g,'').toLowerCase();
+const doneCount=()=>SPOTS.filter((_,i)=>state.done[i]).length;
+const EDIT = new URLSearchParams(location.search).get('edit')==='1';
+/* ── 자리 좌표: 서버(Supabase)에 저장된 값이 있으면 그걸 씁니다 (mission_setup.sql) ── */
+const SB_URL='https://snaldhxucwsaifqrccih.supabase.co', SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNuYWxkaHh1Y3dzYWlmcXJjY2loIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgyNzIwNjAsImV4cCI6MjEwMzg0ODA2MH0.TUdhun_cBHsool0e2FZOOfznjFoC_u5B0MJCl1dTDhI';
+const sb = (window.supabase && window.supabase.createClient) ? window.supabase.createClient(SB_URL, SB_KEY) : null;
+async function loadSpots(){
+  if(!sb) return;
+  try{
+    const { data, error } = await sb.from('baekjung_mission_spots').select('idx,lat,lng');
+    if(error || !data) return;
+    data.forEach(r=>{ const s=SPOTS[r.idx-1]; if(s && isFinite(r.lat) && isFinite(r.lng)){ s.lat=r.lat; s.lng=r.lng; } });
+    if(map){ pins.forEach((m,i)=>m.setLatLng([SPOTS[i].lat,SPOTS[i].lng])); if($('#spot').classList.contains('on')){ fitTo(state.cur); updateNav(); } }
+    if(EDIT) editOut();
+  }catch(e){}
+}
+async function saveSpots(){
+  if(!sb){ toast('서버 연결이 없습니다'); return; }
+  const pass = sessionStorage.getItem('bm_pass') || prompt('관리 암호');
+  if(!pass) return;
+  $('#editSave').disabled=true; $('#editMsg').textContent='저장 중…';
+  const payload = SPOTS.map((s,i)=>({idx:i+1, lat:s.lat, lng:s.lng}));
+  const { error } = await sb.rpc('baekjung_mission_set_spots', { p_pass: pass, p_spots: payload });
+  $('#editSave').disabled=false;
+  if(error){ sessionStorage.removeItem('bm_pass'); $('#editMsg').textContent = (error.message||'').includes('DENIED') ? '암호가 틀렸습니다' : '저장 실패 — mission_setup.sql이 실행되었는지 확인'; return; }
+  sessionStorage.setItem('bm_pass', pass); $('#editMsg').textContent='저장 완료 '+new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})+' — 모든 방문객 앱에 반영됨'; toast('좌표 저장 완료');
+}
+
+/* ── 위치 ── */
+let me=null, watchId=null;
+function startGeo(){
+  if(!('geolocation' in navigator) || watchId!==null) return;
+  watchId=navigator.geolocation.watchPosition(p=>{ me={lat:p.coords.latitude, lng:p.coords.longitude, acc:p.coords.accuracy}; updateNav(); },
+    e=>{ me=null; const n=$('#navTxt'); if(n) n.innerHTML='위치를 쓸 수 없어 글로 안내합니다<small>설정에서 위치 허용 후 새로고침</small>'; },
+    { enableHighAccuracy:true, maximumAge:5000, timeout:15000 });
+}
+const R=6371000, rad=x=>x*Math.PI/180;
+function dist(a,b){ const dLat=rad(b.lat-a.lat), dLng=rad(b.lng-a.lng); const h=Math.sin(dLat/2)**2+Math.cos(rad(a.lat))*Math.cos(rad(b.lat))*Math.sin(dLng/2)**2; return 2*R*Math.asin(Math.sqrt(h)); }
+function bearing(a,b){ const y=Math.sin(rad(b.lng-a.lng))*Math.cos(rad(b.lat)); const x=Math.cos(rad(a.lat))*Math.sin(rad(b.lat))-Math.sin(rad(a.lat))*Math.cos(rad(b.lat))*Math.cos(rad(b.lng-a.lng)); return (Math.atan2(y,x)*180/Math.PI+360)%360; }
+const DIR=['북','북동','동','남동','남','남서','서','북서'];
+
+/* ── 지도 (Leaflet) ── */
+let map=null, pins=[], myMarker=null, myCircle=null, line=null;
+function ensureMap(){
+  if(map || typeof L==='undefined') return;
+  map=L.map('map',{zoomControl:false, attributionControl:true}).setView([SPOTS[0].lat,SPOTS[0].lng],17);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19, attribution:'© OpenStreetMap'}).addTo(map);
+  SPOTS.forEach((s,i)=>{
+    const ic=L.divIcon({className:'', html:'<div class="pin"><span>'+(i+1)+'</span></div>', iconSize:[30,30], iconAnchor:[6,28]});
+    const m=L.marker([s.lat,s.lng],{icon:ic, draggable:EDIT}).addTo(map).bindPopup((i+1)+'. '+s.dest);
+    if(EDIT) m.on('dragend',()=>{ const p=m.getLatLng(); s.lat=+p.lat.toFixed(5); s.lng=+p.lng.toFixed(5); editOut(); });
+    pins.push(m);
+  });
+  if(EDIT){ map.on('click',e=>toast(e.latlng.lat.toFixed(5)+', '+e.latlng.lng.toFixed(5))); }
+}
+function editOut(){ $('#editOut').value=SPOTS.map((s,i)=>(i+1)+' '+s.dest+' — '+s.lat.toFixed(5)+', '+s.lng.toFixed(5)).join('\n'); }
+function placeHere(){
+  if(!me){ toast('내 위치를 아직 못 찾았습니다 — 위치 허용 후 잠시 기다려 주세요'); startGeo(); return; }
+  const i=Number($('#editIdx').value); SPOTS[i].lat=+me.lat.toFixed(6); SPOTS[i].lng=+me.lng.toFixed(6);
+  if(pins[i]) pins[i].setLatLng([SPOTS[i].lat,SPOTS[i].lng]); editOut(); toast((i+1)+'번 핀을 내 위치('+Math.round(me.acc)+'m 오차)에 놓았습니다 — 저장을 누르세요');
+}
+function focusSpot(i){
+  if(!map) return;
+  pins.forEach((m,j)=>{ m.setZIndexOffset(j===i?1000:0); const el=m.getElement(); if(el){ const d=el.querySelector('.pin'); if(d) d.classList.toggle('dim', j!==i); } });
+  setTimeout(()=>{ map.invalidateSize(); fitTo(i); },60);
+}
+function fitTo(i){
+  const s=SPOTS[i];
+  if(me){ map.fitBounds(L.latLngBounds([[s.lat,s.lng],[me.lat,me.lng]]).pad(0.35),{maxZoom:18}); }
+  else map.setView([s.lat,s.lng],17);
+}
+function updateNav(){
+  const i=state.cur, s=SPOTS[i]; const n=$('#navTxt'), ar=$('#navArrow');
+  if(!n) return;
+  if(!me){ n.innerHTML='위치 허용을 누르면 거리와 방향이 나옵니다<small>'+s.dest+'</small>'; return; }
+  const d=dist(me,s), b=bearing(me,s);
+  n.innerHTML='<span class="dist">'+(d<15?'도착했습니다':'약 '+Math.round(d/5)*5+' m · '+DIR[Math.round(b/45)%8]+'쪽')+'</span><small>'+s.dest+(me.acc>40?' · 위치 오차 약 '+Math.round(me.acc)+'m':'')+'</small>';
+  if(ar) ar.style.transform='rotate('+b+'deg)';
+  if(map){
+    if(!myMarker){ myMarker=L.marker([me.lat,me.lng],{icon:L.divIcon({className:'',html:'<div class="mydot"></div>',iconSize:[18,18],iconAnchor:[9,9]}), interactive:false}).addTo(map);
+                   myCircle=L.circle([me.lat,me.lng],{radius:me.acc, color:'#2C5E8A', weight:1, fillOpacity:.08}).addTo(map); }
+    else{ myMarker.setLatLng([me.lat,me.lng]); myCircle.setLatLng([me.lat,me.lng]).setRadius(me.acc); }
+    if(line) line.setLatLngs([[me.lat,me.lng],[s.lat,s.lng]]); else line=L.polyline([[me.lat,me.lng],[s.lat,s.lng]],{color:'#9C3B22', dashArray:'6 8', weight:2.5}).addTo(map);
+  }
+}
+
+/* ── 퍼레이드 휴식 ── */
+const kstNow = () => new Date(Date.now() + (new Date().getTimezoneOffset() + 540) * 60000); // 기기 시간대와 무관하게 KST
+const hm = s => { const [a,b]=s.split(':').map(Number); return a*60+b; };
+const fmtHM = m => String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');
+function pauseInfo(){
+  if(new URLSearchParams(location.search).get('nopause')==='1') return null;
+  const now=kstNow(); const ymd=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
+  if(!EVENT_DATES.includes(ymd)) return null;
+  const m=now.getHours()*60+now.getMinutes();
+  for(const p of PARADES){ const from=hm(p.start)-PAUSE_BEFORE, to=hm(p.end)+PAUSE_AFTER; if(m>=from && m<to) return {start:p.start, resume:fmtHM(to), left:to-m}; }
+  return null;
+}
+function applyPause(){
+  const sp=$('#spot'); if(!sp.classList.contains('on')) return;
+  const info=pauseInfo(); const old=$('#pauseCard'); const mis=sp.querySelector('.mission');
+  if(!info){ if(old) old.remove(); if(mis){ mis.style.opacity=''; mis.style.pointerEvents=''; } return; }
+  const html='<b style="color:var(--seal)">백중놀이 퍼레이드로 잠시 쉬어갑니다</b><p style="margin:4px 0 0; font-size:.95rem"><b>'+info.resume+'</b>에 다시 시작합니다 (약 '+info.left+'분 뒤)<br><span style="font-size:.86rem; color:var(--deep)">'+info.start+' 퍼레이드는 마을 입구 본공연장에서 출발합니다. 30분 전에 민복을 입고 행렬에 함께 걸을 수도 있어요. 지금까지 받은 도장은 그대로 남습니다.</span></p>';
+  if(old) old.innerHTML=html; else { const d=document.createElement('div'); d.id='pauseCard'; d.className='card tint'; d.innerHTML=html; sp.insertBefore(d, sp.firstChild); }
+  if(mis){ mis.style.opacity='.45'; mis.style.pointerEvents='none'; }
+}
+setInterval(applyPause, 30000);
+/* 순서 강제: 앞 자리를 통과해야 다음 자리가 열림 */
+const maxOpen = () => { for(let k=0;k<SPOTS.length;k++) if(!state.done[k]) return k; return SPOTS.length-1; };
+
+/* ── 화면 ── */
+function renderStamps(){
+  const box=$('#stamps'); box.innerHTML='';
+  SPOTS.forEach((s,i)=>{ const b=document.createElement('button'); b.className='stamp'+(state.done[i]?' done':'')+(i===state.cur&&$('#spot').classList.contains('on')?' cur':''); b.textContent=s.n; b.setAttribute('aria-label',(i+1)+'번째 자리'); if(!EDIT && i>maxOpen()) b.disabled=true; b.addEventListener('click',()=>show(i)); box.appendChild(b); });
+  $('#hdSub').textContent=doneCount()+' / '+SPOTS.length+' 도장';
+}
+function screen(id){ document.querySelectorAll('.scr').forEach(s=>s.classList.toggle('on',s.id===id)); window.scrollTo(0,0); }
+
+function show(i){
+  if(!EDIT && i>maxOpen()){ toast('미션은 순서대로 — '+SPOTS[maxOpen()].n+' 자리를 먼저 통과하세요'); return; }
+  state.cur=i; save();
+  const s=SPOTS[i], isDone=!!state.done[i];
+  let h='<div class="num"><span class="n">'+s.n+'</span><span class="w">'+(i+1)+' / '+SPOTS.length+' 자리</span></div>'+
+        '<div class="ttl"><img class="por" src="img/spot'+(i+1)+'.jpg" alt="" onerror="this.style.display=\'none\'"><h2>'+s.title+'</h2></div>';
+  // 길 안내 + 지도
+  h+='<div class="go"><div class="gt"><b>여기로 가세요</b><span class="dest">'+s.dest+'</span><p>'+s.go+'</p></div>'+
+     '<div class="nav"><div class="arrow" id="navArrow">▲</div><div id="navTxt">위치를 확인하는 중…</div></div>'+
+     '<div id="mapHolder"></div>'+
+     '<div class="mapbar"><button id="geoBtn">내 위치</button><button id="bigBtn">지도 크게</button><button id="centerBtn">자리 보기</button></div></div>';
+  // 미션
+  h+='<div class="card mission"><h3><span class="tag">'+s.tag+'</span>미션</h3><p class="q">'+s.q+'</p>'+(s.note?'<p class="hint">'+s.note+'</p>':'');
+  if(s.type==='riddle'){
+    h+='<div class="ans"><input id="ansIn" placeholder="'+s.ph+'" autocomplete="off" '+(isDone?'value="'+s.answers[0]+'" disabled':'')+'><button class="btn" id="ansBtn" '+(isDone?'disabled':'')+'>확인</button></div>'+
+       '<p class="fb'+(isDone?' ok':'')+'" id="fb">'+(isDone?'통과 — 도장 완료':'')+'</p>'+
+       (isDone?'':'<p class="hint" id="hint"><button id="hintBtn">힌트 보기</button>'+(s.showRiddle&&s.riddle?' · <button id="ridBtn">수수께끼 보기</button>':'')+'</p>'+(s.riddle?'<div class="riddle" id="riddle">'+s.riddle+'</div>':''));
+  }else{
+    if(s.type==='choice-photo'){
+      h+='<div class="choices">'+s.choices.map(c=>'<button class="choice" data-k="'+c.k+'" aria-pressed="'+(state.choice[i]===c.k)+'"><b>'+c.t+'</b><small>'+c.s+'</small></button>').join('')+'</div>';
+    }
+    h+='<div class="photo"><input type="file" id="fileCam" accept="image/*" capture="environment"><input type="file" id="fileLib" accept="image/*">'+
+       '<div class="shots"><label for="fileCam"><b>📷</b>지금 찍기</label><label for="fileLib"><b>🖼</b>앨범에서 고르기</label></div>'+
+       '<div class="prev" id="prev"><img id="prevImg" alt="축제 액자를 씌운 사진"><div class="acts"><button class="btn" id="saveBtn">앨범에 저장</button></div><p class="tip" id="saveTip">저장이 안 되면 사진을 길게 눌러 "이미지 저장"</p></div>'+
+       '<p class="fb'+(isDone?' ok':'')+'" id="fb">'+(isDone?'통과 — 도장 완료':'')+'</p></div>';
+  }
+  h+='</div>';
+  h+='<div class="next" id="next"><button class="btn wide" id="nextBtn" '+(isDone?'':'disabled')+'>'+(isDone?(i<SPOTS.length-1?'다음 자리로 →':'룰렛 돌리러 가기'):'미션을 통과하면 열립니다')+'</button></div>';
+  if(i>0) h+='<p class="skip"><button id="prevBtn">이전 자리 보기</button></p>';
+  const ebx=$('#editbox'); if(ebx && ebx.parentElement!==document.body) document.body.appendChild(ebx);   // 편집 상자 보존
+  $('#spot').innerHTML=h; screen('spot'); renderStamps(); applyPause();
+  if(EDIT){ $('#spot').querySelector('.go').after(ebx); }   // 편집 모드: 상자를 지도 바로 아래로
+
+  // 지도 DOM 재사용
+  let mapEl=document.getElementById('map'); if(!mapEl){ mapEl=document.createElement('div'); mapEl.id='map'; }
+  $('#mapHolder').appendChild(mapEl); ensureMap(); focusSpot(i); updateNav(); startGeo();
+  $('#geoBtn').addEventListener('click',()=>{ startGeo(); if(me && map) map.setView([me.lat,me.lng],18); else toast('위치를 찾는 중입니다 — 허용 창이 뜨면 허용을 눌러 주세요'); });
+  $('#bigBtn').addEventListener('click',()=>{ mapEl.classList.toggle('big'); $('#bigBtn').textContent=mapEl.classList.contains('big')?'지도 작게':'지도 크게'; setTimeout(()=>{ map&&map.invalidateSize(); fitTo(i); },60); });
+  $('#centerBtn').addEventListener('click',()=>{ map&&map.setView([s.lat,s.lng],18); });
+
+  if(s.type==='riddle' && !isDone){
+    const inp=$('#ansIn'); let tries=0;
+    const check=()=>{ const v=norm(inp.value); if(!v){ toast('답을 적어 주세요'); return; }
+      if(s.answers.map(norm).includes(v)){ complete(i); $('#fb').className='fb ok'; $('#fb').textContent='정답! 도장이 찍혔습니다'; inp.disabled=true; $('#ansBtn').disabled=true; }
+      else{ tries++; $('#fb').className='fb no'; $('#fb').textContent= tries>=3 ? '힌트를 보거나 캐릭터에게 다시 물어보세요' : '아직 아니에요. 다시 생각해 볼까요?'; } };
+    $('#ansBtn').addEventListener('click',check); inp.addEventListener('keydown',e=>{ if(e.key==='Enter') check(); });
+    $('#hintBtn').addEventListener('click',()=>{ $('#hintBtn').replaceWith(document.createTextNode('힌트 — '+s.hint)); });
+    const rb=$('#ridBtn'); if(rb) rb.addEventListener('click',()=>{ $('#riddle').style.display='block'; });
+  }else{
+    document.querySelectorAll('.choice').forEach(b=>b.addEventListener('click',()=>{ state.choice[i]=b.dataset.k; save(); document.querySelectorAll('.choice').forEach(x=>x.setAttribute('aria-pressed', x===b)); }));
+    const onFile=e=>{ const f=e.target.files&&e.target.files[0]; if(!f) return;
+      if(s.type==='choice-photo' && !state.choice[i]){ toast('먼저 놀이를 하나 고르세요'); e.target.value=''; return; }
+      frame(f, s, i); };
+    $('#fileCam').addEventListener('change',onFile); $('#fileLib').addEventListener('change',onFile);
+  }
+  $('#nextBtn').addEventListener('click',()=>{ if(i<SPOTS.length-1) show(i+1); else finish(); });
+  const pb=$('#prevBtn'); if(pb) pb.addEventListener('click',()=>show(i-1));
+}
+function complete(i){ state.done[i]=true; save(); renderStamps(); const nb=$('#nextBtn'); nb.disabled=false; nb.textContent=(i<SPOTS.length-1?'다음 자리로 →':'룰렛 돌리러 가기'); setTimeout(()=>$('#next').scrollIntoView({behavior:'smooth',block:'end'}),150); }
+
+/* ── 사진: 액자 씌우기 → 앨범 저장 (휴대폰 안에서만 처리) ── */
+let lastBlob=null, lastName='';
+function frame(file, s, i){
+  const img=new Image(); const url=URL.createObjectURL(file);
+  img.onload=()=>{
+    const MAX=1600; let w=img.naturalWidth, h=img.naturalHeight; const sc=Math.min(1,MAX/Math.max(w,h)); w=Math.round(w*sc); h=Math.round(h*sc);
+    const pad=Math.round(Math.min(w,h)*.045), band=Math.round(Math.min(w,h)*.16);
+    const cv=$('#cv'); cv.width=w+pad*2; cv.height=h+pad*2+band; const c=cv.getContext('2d');
+    c.fillStyle='#F3ECDC'; c.fillRect(0,0,cv.width,cv.height); c.drawImage(img,pad,pad,w,h);
+    c.strokeStyle='#221C15'; c.lineWidth=Math.max(2,pad*.12); c.strokeRect(pad,pad,w,h);
+    const fs=Math.round(band*.34), fs2=Math.round(band*.22); c.textBaseline='middle'; c.textAlign='left';
+    const lab=(s.label||s.n)+(s.type==='choice-photo'&&state.choice[i]?' · '+state.choice[i]:'');
+    c.fillStyle='#221C15'; c.font='700 '+fs+'px "Gowun Batang", serif'; c.fillText('백중미션 '+lab, pad, pad+h+band*.40);
+    c.fillStyle='#8A5A33'; c.font=fs2+'px "Gowun Batang", serif'; c.fillText('2026 백중마을 축제 · 퇴로고가마을', pad, pad+h+band*.74);
+    const sz=Math.round(band*.72), sx=cv.width-pad-sz, sy=pad+h+Math.round((band-sz)/2);
+    c.save(); c.translate(sx+sz/2,sy+sz/2); c.rotate(-.12); c.fillStyle='#9C3B22'; c.fillRect(-sz/2,-sz/2,sz,sz);
+    c.strokeStyle='#F3ECDC'; c.lineWidth=Math.max(2,sz*.05); c.strokeRect(-sz/2+sz*.1,-sz/2+sz*.1,sz*.8,sz*.8);
+    c.fillStyle='#F3ECDC'; c.textAlign='center'; c.font='700 '+Math.round(sz*.42)+'px "Gowun Batang", serif'; c.fillText('백중',0,0); c.restore();
+    cv.toBlob(b=>{ lastBlob=b; lastName='백중미션_'+(i+1)+'.jpg'; const u=URL.createObjectURL(b); $('#prevImg').src=u; $('#prev').style.display='block';
+      URL.revokeObjectURL(url); complete(i); $('#fb').className='fb ok'; $('#fb').textContent='통과! 도장이 찍혔습니다 — 사진을 앨범에 저장하세요';
+      $('#saveBtn').onclick=()=>saveToAlbum(lastBlob,lastName); }, 'image/jpeg', .9);
+  };
+  img.onerror=()=>{ toast('사진을 읽지 못했어요. 다시 골라 주세요'); URL.revokeObjectURL(url); };
+  $('#prevImg').src=url; $('#prev').style.display='block';   // 찍은 사진을 먼저 보여주고, 액자 처리 뒤 교체
+  img.src=url;
+}
+async function saveToAlbum(blob, name){
+  if(!blob) return;
+  const f=new File([blob], name, {type:'image/jpeg'});
+  if(navigator.canShare && navigator.canShare({files:[f]})){
+    try{ await navigator.share({files:[f], title:'백중미션'}); toast('공유 창에서 "이미지 저장"을 누르면 앨범에 들어갑니다'); return; }
+    catch(e){ if(e && e.name==='AbortError') return; }
+  }
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; document.body.appendChild(a); a.click(); a.remove();
+  toast('다운로드 폴더에 저장했습니다 (갤러리에서 보입니다)');
+}
+
+/* ── 룰렛 → 점괘 ── */
+const COLORS=['#9C3B22','#C7B08A','#3E6B45','#E8D9B5','#8A5A33','#F3ECDC','#2C5E8A','#D9C7A0'];
+let angle=0, spinning=false;
+function drawWheel(a){
+  const cv=$('#wheel'), c=cv.getContext('2d'), n=FORTUNES.length, cx=320, cy=320, r=300;
+  c.clearRect(0,0,640,640);
+  for(let k=0;k<n;k++){
+    const s0=a+k*2*Math.PI/n, s1=s0+2*Math.PI/n;
+    c.beginPath(); c.moveTo(cx,cy); c.arc(cx,cy,r,s0,s1); c.closePath(); c.fillStyle=COLORS[k%COLORS.length]; c.fill(); c.strokeStyle='#221C15'; c.lineWidth=3; c.stroke();
+    c.save(); c.translate(cx,cy); c.rotate(s0+Math.PI/n); c.textAlign='right'; c.textBaseline='middle';
+    const dark=['#C7B08A','#E8D9B5','#F3ECDC','#D9C7A0'].includes(COLORS[k%COLORS.length]); c.fillStyle=dark?'#221C15':'#F3ECDC';
+    c.font='700 54px "Gowun Batang", serif'; c.fillText(FORTUNES[k].h, r-28, 0); c.restore();
+  }
+  c.beginPath(); c.arc(cx,cy,r,0,2*Math.PI); c.strokeStyle='#221C15'; c.lineWidth=6; c.stroke();
+}
+function spin(){
+  if(spinning) return; spinning=true; $('#spin').disabled=true;
+  const n=FORTUNES.length, target=Math.floor(Math.random()*n);
+  // 포인터(위쪽, -90°)가 target 칸 중앙에 오도록
+  const seg=2*Math.PI/n, finalA=-Math.PI/2 - (target*seg + seg/2) - 2*Math.PI*6;
+  const start=angle, delta=finalA-start, T=4200, t0=performance.now();
+  const step=now=>{ const t=Math.min(1,(now-t0)/T), e=1-Math.pow(1-t,3); angle=start+delta*e; drawWheel(angle); if(t<1) requestAnimationFrame(step); else{ spinning=false; state.fortune=target; save(); showFortune(target); } };
+  requestAnimationFrame(step);
+}
+function showFortune(k){
+  const f=FORTUNES[k]; const el=$('#fortune');
+  el.innerHTML='<div class="seal">福</div><p class="hanja">'+f.h+'</p><p class="ttl brush">'+f.t+' — '+f.s+'</p><p>'+f.p+'</p><p><b>'+f.one+'</b></p><div class="luck">'+f.luck.map(x=>'<span>'+x+'</span>').join('')+'</div>';
+  el.style.display='block'; $('#spin').textContent='福'; $('#finLead').textContent='룰렛이 고른 오늘의 복입니다. 화면을 캡처해 간직하세요.';
+  setTimeout(()=>el.scrollIntoView({behavior:'smooth',block:'center'}),200);
+}
+function finish(){ screen('fin'); renderStamps(); drawWheel(angle); if(state.fortune!==null){ $('#spin').disabled=true; showFortune(state.fortune); } }
+
+/* ── 시작 ── */
+$('#preList').innerHTML=SPOTS.map(s=>'<li>'+s.pre+'</li>').join('');
+$('#start').addEventListener('click',()=>show(0));
+$('#spin').addEventListener('click',spin);
+$('#reset').addEventListener('click',()=>{ if(!confirm('도장과 점괘를 모두 지우고 처음부터 할까요?')) return; state={done:{},cur:0,choice:{},fortune:null}; save(); $('#spin').disabled=false; $('#spin').textContent='돌리기'; $('#fortune').style.display='none'; renderStamps(); screen('home'); });
+const ec=$('#editCopy'); if(ec) ec.addEventListener('click',async()=>{ try{ await navigator.clipboard.writeText($('#editOut').value); toast('복사됨'); }catch(e){ $('#editOut').select(); } });
+$('#editSave').addEventListener('click', saveSpots);
+$('#editHere').addEventListener('click', placeHere);
+if(EDIT){ $('#editbox').style.display='block'; editOut(); startGeo(); }
+loadSpots();
+renderStamps();
+if(EDIT) show(0);
+else if(doneCount()===SPOTS.length) finish();
+else if(doneCount()>0||state.cur>0) show(Math.min(state.cur,SPOTS.length-1));
+</script>
+</body>
+</html>
