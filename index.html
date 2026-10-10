@@ -171,7 +171,8 @@ h2 .brush{font-size:1.25em}
   </div>
   <textarea id="editOut" readonly></textarea>
   <div style="display:flex; gap:6px; margin-top:6px"><button class="btn" id="editSave" style="flex:2">저장 (서버)</button><button class="btn ghost" id="editCopy" style="flex:1">복사</button></div>
-  <p id="editMsg" style="margin:6px 0 0; color:var(--brown)"></p></div>
+  <p id="editAcc" style="margin:6px 0 0; color:var(--deep)">위치 확인 중…</p>
+  <p id="editMsg" style="margin:4px 0 0; color:var(--brown)"></p></div>
 <div id="toast"></div>
 <canvas id="cv" style="display:none"></canvas>
 
@@ -276,11 +277,17 @@ async function saveSpots(){
 }
 
 /* ── 위치 ── */
-let me=null, watchId=null;
+let me=null, watchId=null, fixes=[];
 function startGeo(){
   if(!('geolocation' in navigator) || watchId!==null) return;
-  watchId=navigator.geolocation.watchPosition(p=>{ me={lat:p.coords.latitude, lng:p.coords.longitude, acc:p.coords.accuracy}; updateNav(); },
-    e=>{ me=null; const n=$('#navTxt'); if(n) n.innerHTML='위치를 쓸 수 없어 글로 안내합니다<small>설정에서 위치 허용 후 새로고침</small>'; },
+  watchId=navigator.geolocation.watchPosition(p=>{
+    const f={lat:p.coords.latitude, lng:p.coords.longitude, acc:p.coords.accuracy||999, t:Date.now()};
+    fixes.push(f); fixes=fixes.filter(x=>Date.now()-x.t<30000);          // 최근 30초만 보관
+    // 와이파이·기지국 기반의 거친 값(오차 큼)은 더 좋은 값이 있으면 무시
+    if(!me || f.acc<=me.acc*1.5 || Date.now()-me.t>20000) me=f;
+    updateNav(); const ea=$('#editAcc'); if(ea) ea.textContent='현재 위치 오차 ±'+Math.round(me.acc)+' m'+(me.acc>30?' — 하늘이 트인 곳에서 10초쯤 기다리면 좋아집니다':' (양호)');
+  },
+    e=>{ if(e && e.code===1){ me=null; const n=$('#navTxt'); if(n) n.innerHTML='위치를 쓸 수 없어 글로 안내합니다<small>설정에서 위치 허용 후 새로고침</small>'; } /* 일시 오류(신호 없음·시간 초과)는 마지막 위치 유지 */ },
     { enableHighAccuracy:true, maximumAge:5000, timeout:15000 });
 }
 const R=6371000, rad=x=>x*Math.PI/180;
@@ -293,7 +300,7 @@ let map=null, pins=[], myMarker=null, myCircle=null, line=null;
 function ensureMap(){
   if(map || typeof L==='undefined') return;
   map=L.map('map',{zoomControl:false, attributionControl:true}).setView([SPOTS[0].lat,SPOTS[0].lng],17);
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19, attribution:'© OpenStreetMap'}).addTo(map);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:20, maxNativeZoom:19, attribution:'© OpenStreetMap'}).addTo(map);
   SPOTS.forEach((s,i)=>{
     const ic=L.divIcon({className:'', html:'<div class="pin"><span>'+(i+1)+'</span></div>', iconSize:[30,30], iconAnchor:[6,28]});
     const m=L.marker([s.lat,s.lng],{icon:ic, draggable:EDIT}).addTo(map).bindPopup((i+1)+'. '+s.dest);
@@ -305,8 +312,13 @@ function ensureMap(){
 function editOut(){ $('#editOut').value=SPOTS.map((s,i)=>(i+1)+' '+s.dest+' — '+s.lat.toFixed(5)+', '+s.lng.toFixed(5)).join('\n'); }
 function placeHere(){
   if(!me){ toast('내 위치를 아직 못 찾았습니다 — 위치 허용 후 잠시 기다려 주세요'); startGeo(); return; }
-  const i=Number($('#editIdx').value); SPOTS[i].lat=+me.lat.toFixed(6); SPOTS[i].lng=+me.lng.toFixed(6);
-  if(pins[i]) pins[i].setLatLng([SPOTS[i].lat,SPOTS[i].lng]); editOut(); toast((i+1)+'번 핀을 내 위치('+Math.round(me.acc)+'m 오차)에 놓았습니다 — 저장을 누르세요');
+  const good=fixes.filter(f=>f.acc<=30); let lat,lng,acc;
+  if(good.length>=2){ lat=good.reduce((a,f)=>a+f.lat,0)/good.length; lng=good.reduce((a,f)=>a+f.lng,0)/good.length; acc=Math.min(...good.map(f=>f.acc)); }
+  else { lat=me.lat; lng=me.lng; acc=me.acc; }
+  if(acc>40 && !confirm('지금 위치 오차가 ±'+Math.round(acc)+' m로 큽니다. 그래도 이 자리에 놓을까요?\n(취소 후 하늘이 트인 곳에서 10초쯤 기다리면 오차가 줄어듭니다)')) return;
+  const i=Number($('#editIdx').value); SPOTS[i].lat=+lat.toFixed(6); SPOTS[i].lng=+lng.toFixed(6);
+  if(pins[i]) pins[i].setLatLng([SPOTS[i].lat,SPOTS[i].lng]); if(map) map.setView([SPOTS[i].lat,SPOTS[i].lng],19);
+  editOut(); toast((i+1)+'번 핀을 내 위치(오차 ±'+Math.round(acc)+' m'+(good.length>=2?', '+good.length+'회 평균':'')+')에 놓았습니다 — 저장을 누르세요');
 }
 function focusSpot(i){
   if(!map) return;
@@ -323,7 +335,7 @@ function updateNav(){
   if(!n) return;
   if(!me){ n.innerHTML='위치 허용을 누르면 거리와 방향이 나옵니다<small>'+s.dest+'</small>'; return; }
   const d=dist(me,s), b=bearing(me,s);
-  n.innerHTML='<span class="dist">'+(d<15?'도착했습니다':'약 '+Math.round(d/5)*5+' m · '+DIR[Math.round(b/45)%8]+'쪽')+'</span><small>'+s.dest+(me.acc>40?' · 위치 오차 약 '+Math.round(me.acc)+'m':'')+'</small>';
+  n.innerHTML='<span class="dist">'+(d<Math.max(15,me.acc)?'도착했습니다':'약 '+Math.round(d/5)*5+' m · '+DIR[Math.round(b/45)%8]+'쪽')+'</span><small>'+s.dest+' · 오차 ±'+Math.round(me.acc)+' m'+(me.acc>60?' (정확한 위치 켜기·하늘 트인 곳)':'')+'</small>';
   if(ar) ar.style.transform='rotate('+b+'deg)';
   if(map){
     if(!myMarker){ myMarker=L.marker([me.lat,me.lng],{icon:L.divIcon({className:'',html:'<div class="mydot"></div>',iconSize:[18,18],iconAnchor:[9,9]}), interactive:false}).addTo(map);
@@ -348,10 +360,15 @@ function pauseInfo(){
 function applyPause(){
   const sp=$('#spot'); if(!sp.classList.contains('on')) return;
   const info=pauseInfo(); const old=$('#pauseCard'); const mis=sp.querySelector('.mission');
-  if(!info){ if(old) old.remove(); if(mis){ mis.style.opacity=''; mis.style.pointerEvents=''; } return; }
+  if(!info){ if(old) old.remove(); if(mis){ mis.style.opacity=''; mis.style.pointerEvents=''; const pn=mis.querySelector('#pauseNote'); if(pn) pn.remove(); mis.querySelectorAll('input,button,label').forEach(x=>{ if(x.dataset.pz){ x.disabled=false; delete x.dataset.pz; if(x.dataset.ph){ x.placeholder=x.dataset.ph; } } }); } return; }
   const html='<b style="color:var(--seal)">백중놀이 퍼레이드로 잠시 쉬어갑니다</b><p style="margin:4px 0 0; font-size:.95rem"><b>'+info.resume+'</b>에 다시 시작합니다 (약 '+info.left+'분 뒤)<br><span style="font-size:.86rem; color:var(--deep)">'+info.start+' 퍼레이드는 마을 입구 본공연장에서 출발합니다. 30분 전에 민복을 입고 행렬에 함께 걸을 수도 있어요. 지금까지 받은 도장은 그대로 남습니다.</span></p>';
   if(old) old.innerHTML=html; else { const d=document.createElement('div'); d.id='pauseCard'; d.className='card tint'; d.innerHTML=html; sp.insertBefore(d, sp.firstChild); }
-  if(mis){ mis.style.opacity='.45'; mis.style.pointerEvents='none'; }
+  if(mis){
+    mis.style.opacity='.7'; mis.style.pointerEvents='none';
+    let pn=mis.querySelector('#pauseNote'); if(!pn){ pn=document.createElement('p'); pn.id='pauseNote'; pn.className='fb no'; mis.insertBefore(pn, mis.firstChild); }
+    pn.innerHTML='⏸ 퍼레이드 휴식 중 — <b>'+info.resume+'</b>부터 다시 입력할 수 있습니다';
+    mis.querySelectorAll('input:not([disabled]),button:not([disabled])').forEach(x=>{ x.dataset.pz='1'; if(x.placeholder!==undefined && x.tagName==='INPUT' && x.type!=='file'){ x.dataset.ph=x.placeholder; x.placeholder=info.resume+'부터'; } x.disabled=true; });
+  }
 }
 setInterval(applyPause, 30000);
 /* 순서 강제: 앞 자리를 통과해야 다음 자리가 열림 */
@@ -405,7 +422,7 @@ function show(i){
   $('#bigBtn').addEventListener('click',()=>{ mapEl.classList.toggle('big'); $('#bigBtn').textContent=mapEl.classList.contains('big')?'지도 작게':'지도 크게'; setTimeout(()=>{ map&&map.invalidateSize(); fitTo(i); },60); });
   $('#centerBtn').addEventListener('click',()=>{ map&&map.setView([s.lat,s.lng],18); });
 
-  if(s.type==='riddle' && !isDone){
+  if(s.type==='riddle'){ if(!isDone){
     const inp=$('#ansIn'); let tries=0;
     const check=()=>{ const v=norm(inp.value); if(!v){ toast('답을 적어 주세요'); return; }
       if(s.answers.map(norm).includes(v)){ complete(i); $('#fb').className='fb ok'; $('#fb').textContent='정답! 도장이 찍혔습니다'; inp.disabled=true; $('#ansBtn').disabled=true; }
@@ -413,7 +430,7 @@ function show(i){
     $('#ansBtn').addEventListener('click',check); inp.addEventListener('keydown',e=>{ if(e.key==='Enter') check(); });
     $('#hintBtn').addEventListener('click',()=>{ $('#hintBtn').replaceWith(document.createTextNode('힌트 — '+s.hint)); });
     const rb=$('#ridBtn'); if(rb) rb.addEventListener('click',()=>{ $('#riddle').style.display='block'; });
-  }else{
+  } }else{
     document.querySelectorAll('.choice').forEach(b=>b.addEventListener('click',()=>{ state.choice[i]=b.dataset.k; save(); document.querySelectorAll('.choice').forEach(x=>x.setAttribute('aria-pressed', x===b)); }));
     const onFile=e=>{ const f=e.target.files&&e.target.files[0]; if(!f) return;
       if(s.type==='choice-photo' && !state.choice[i]){ toast('먼저 놀이를 하나 고르세요'); e.target.value=''; return; }
