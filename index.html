@@ -421,6 +421,7 @@ function show(i){
   h+='<div class="next" id="next"><button class="btn wide" id="nextBtn" '+(isDone?'':'disabled')+'>'+(isDone?(i<SPOTS.length-1?'다음 자리로 →':'룰렛 돌리러 가기'):'미션을 통과하면 열립니다')+'</button></div>';
   if(i>0) h+='<p class="skip"><button id="prevBtn">이전 자리 보기</button></p>';
   const ebx=$('#editbox'); if(ebx && ebx.parentElement!==document.body) document.body.appendChild(ebx);   // 편집 상자 보존
+  const mk=document.getElementById('map'); if(mk) document.body.appendChild(mk);                           // 지도 DOM 보존(재생성 금지)
   $('#spot').innerHTML=h; screen('spot'); renderStamps(); applyPause();
   if(EDIT){ $('#spot').querySelector('.go').after(ebx); }   // 편집 모드: 상자를 지도 바로 아래로
 
